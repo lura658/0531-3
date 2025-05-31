@@ -105,21 +105,25 @@ function handModelReady() {}
 function draw() {
   background(255);
 
-  // 左側：攝影機與互動
+  // 左側：攝影機與互動（左右相反）
+  push();
+  translate(640, 0);
+  scale(-1, 1);
   image(video, 0, 0, 640, 480);
+  pop();
 
-  // 臉部特效與右側特效
+  // 臉部特效與右側特效（座標不變，維持正常）
   if (predictions.length > 0 && showEffect) {
     const keypoints = predictions[0].scaledMesh;
-    let headX = keypoints[10][0];
+    let headX = 640 - keypoints[10][0]; // 反轉後的頭頂座標
     let headY = keypoints[10][1];
     if (effectType === "correct") {
       image(checkImg, headX - 30, headY - 100, 60, 60);
-      drawHappyEffect(800, 120); // 歡樂特效
+      drawHappyEffect(800, 120);
     } else if (effectType === "wrong") {
       image(crossImg, headX - 30, headY - 100, 60, 60);
-      drawSadEffect(800, 120); // 陰暗特效
-      drawBlackLines(keypoints);
+      drawSadEffect(800, 120);
+      drawBlackLines([headX, headY]);
     }
   }
 
@@ -135,7 +139,7 @@ function draw() {
   if (gameState === "start") {
     text("教育科技課程知識大亂鬥", 660, 40);
     textSize(16);
-    text("歡迎來到知識大亂鬥！\n\n1. 按 Enter 鍵開始隨機五題挑戰\n2. 用一手比出選項（1~4指），另一手比OK手勢確認\n3. 答對有歡樂特效，答錯有陰暗特效\n4. 張開手(五指)切換下一題\n5. 比出7手勢可隨時觀看說明\n\n快來挑戰你的教育科技腦力吧！", 660, 90);
+    drawMultiline("歡迎來到知識大亂鬥！\n1. 按 Enter 開始隨機五題\n2. 一手比選項(1~4指)，另一手握拳確認\n3. 答對有歡樂特效，答錯有陰暗特效\n4. 握拳確認答案，張開手(五指)切換下一題\n5. 比讚可隨時觀看說明\n快來挑戰你的教育科技腦力吧！", 660, 90, 12);
   } else if (gameState === "quiz") {
     showQuestion();
     showHandGesture();
@@ -144,11 +148,11 @@ function draw() {
       rect(650, 250, 230, 180, 12);
       fill(255);
       textSize(16);
-      text("【遊戲說明】\n1. 用一手比出選項（1~4指）\n2. 另一手比OK手勢確認答案\n3. 張開手(五指)切換下一題\n4. 比出7手勢可隨時觀看說明", 660, 260);
+      drawMultiline("【遊戲說明】\n1. 一手比選項(1~4指)\n2. 另一手握拳確認答案\n3. 張開手(五指)切換下一題\n4. 比讚可隨時觀看說明", 660, 260, 12);
     }
     fill(100, 100, 255);
     textSize(14);
-    text("[當手勢比出\"7\"時，可以觀看遊戲說明]", 660, 440);
+    drawMultiline("[比讚可隨時觀看遊戲說明]", 660, 440, 12);
   } else if (gameState === "result") {
     text("挑戰結束！", 660, 60);
     text("你的分數：" + score + " / 5", 660, 120);
@@ -182,23 +186,36 @@ function showQuestion() {
   }
 }
 
+// 握拳判斷（五指都彎曲）
+function isFistGesture(landmarks) {
+  // 指尖y大於指根y，且拇指靠近掌心
+  let fingersBent = [8, 12, 16, 20].every(i => landmarks[i][1] > landmarks[i - 2][1]);
+  let thumbBent = Math.abs(landmarks[4][0] - landmarks[2][0]) < 30;
+  return fingersBent && thumbBent;
+}
+
+// 比讚判斷（拇指伸直，其餘彎曲）
+function isThumbsUpGesture(landmarks) {
+  let thumbUp = landmarks[4][1] < landmarks[3][1] && landmarks[4][1] < landmarks[2][1];
+  let fingersBent = [8, 12, 16, 20].every(i => landmarks[i][1] > landmarks[i - 2][1]);
+  return thumbUp && fingersBent;
+}
+
 function showHandGesture() {
   if (handPredictions.length >= 2 && !showResult && !waitingNext) {
-    // 兩隻手
     let handA = handPredictions[0];
     let handB = handPredictions[1];
     let countA = countExtendedFingers(handA.landmarks);
     let countB = countExtendedFingers(handB.landmarks);
 
-    // 檢查是否有一手比1~4，另一手比OK
-    let okA = isOKGesture(handA.landmarks);
-    let okB = isOKGesture(handB.landmarks);
+    let fistA = isFistGesture(handA.landmarks);
+    let fistB = isFistGesture(handB.landmarks);
 
     if (
-      ((countA >= 1 && countA <= 4) && okB) ||
-      ((countB >= 1 && countB <= 4) && okA)
+      ((countA >= 1 && countA <= 4) && fistB) ||
+      ((countB >= 1 && countB <= 4) && fistA)
     ) {
-      let answer = String.fromCharCode(64 + (okA ? countB : countA));
+      let answer = String.fromCharCode(64 + (fistA ? countB : countA));
       selectedAnswer = answer;
       showResult = true;
       showEffect = true;
@@ -209,8 +226,8 @@ function showHandGesture() {
     }
   }
 
-  // 比出7手勢顯示說明
-  if (handPredictions.length > 0 && detectSevenGesture(handPredictions[0].landmarks)) {
+  // 比讚顯示說明
+  if (handPredictions.length > 0 && isThumbsUpGesture(handPredictions[0].landmarks)) {
     showHelp = true;
   } else {
     showHelp = false;
@@ -226,6 +243,21 @@ function showHandGesture() {
     if (currentQuestion >= 5) {
       gameState = "result";
     }
+  }
+}
+
+// 自動換行繪製
+function drawMultiline(str, x, y, maxLen) {
+  let lines = [];
+  str.split('\n').forEach(seg => {
+    while (seg.length > maxLen) {
+      lines.push(seg.slice(0, maxLen));
+      seg = seg.slice(maxLen);
+    }
+    lines.push(seg);
+  });
+  for (let i = 0; i < lines.length; i++) {
+    text(lines[i], x, y + i * 22);
   }
 }
 
