@@ -72,9 +72,12 @@ const allQuestions = [
 // 載入圖示
 let checkImg, crossImg;
 function preload() {
-  checkImg = loadImage('https://i.imgur.com/4L7bYlT.png'); // 綠色勾勾
-  crossImg = loadImage('https://i.imgur.com/6YQbQkA.png'); // 紅色叉叉
+  checkImg = loadImage('勾.png'); // 本地綠色勾勾
+  crossImg = loadImage('叉.png'); // 本地紅色叉叉
 }
+
+let showHelp = false;
+let waitingNext = false;
 
 function setup() {
   createCanvas(900, 480).position(
@@ -105,18 +108,17 @@ function draw() {
   // 左側：攝影機與互動
   image(video, 0, 0, 640, 480);
 
-  // 臉部特效
+  // 臉部特效與右側特效
   if (predictions.length > 0 && showEffect) {
     const keypoints = predictions[0].scaledMesh;
     let headX = keypoints[10][0];
     let headY = keypoints[10][1];
     if (effectType === "correct") {
-      // 綠色勾勾在頭頂
       image(checkImg, headX - 30, headY - 100, 60, 60);
-      drawFireworks(headX, headY - 100);
+      drawHappyEffect(800, 120); // 歡樂特效
     } else if (effectType === "wrong") {
-      // 紅色叉叉在頭頂
       image(crossImg, headX - 30, headY - 100, 60, 60);
+      drawSadEffect(800, 120); // 陰暗特效
       drawBlackLines(keypoints);
     }
   }
@@ -131,12 +133,22 @@ function draw() {
   textAlign(LEFT, TOP);
 
   if (gameState === "start") {
-    text("教育科技課程知識大挑戰", 660, 40);
+    text("教育科技課程知識大亂鬥", 660, 40);
     textSize(16);
-    text("歡迎來到知識大亂鬥！\n\n1. 按 Enter 鍵開始隨機五題挑戰\n2. 用手勢選擇答案：\n   - 1 指：A\n   - 2 指：B\n   - 3 指：C\n   - 4 指：D\n3. 答對有特效，全部答完顯示分數\n\n快來挑戰你的教育科技腦力吧！", 660, 90);
+    text("歡迎來到知識大亂鬥！\n\n1. 按 Enter 鍵開始隨機五題挑戰\n2. 用一手比出選項（1~4指），另一手比OK手勢確認\n3. 答對有歡樂特效，答錯有陰暗特效\n4. 張開手(五指)切換下一題\n5. 比出7手勢可隨時觀看說明\n\n快來挑戰你的教育科技腦力吧！", 660, 90);
   } else if (gameState === "quiz") {
     showQuestion();
     showHandGesture();
+    if (showHelp) {
+      fill(0, 180);
+      rect(650, 250, 230, 180, 12);
+      fill(255);
+      textSize(16);
+      text("【遊戲說明】\n1. 用一手比出選項（1~4指）\n2. 另一手比OK手勢確認答案\n3. 張開手(五指)切換下一題\n4. 比出7手勢可隨時觀看說明", 660, 260);
+    }
+    fill(100, 100, 255);
+    textSize(14);
+    text("[當手勢比出\"7\"時，可以觀看遊戲說明]", 660, 440);
   } else if (gameState === "result") {
     text("挑戰結束！", 660, 60);
     text("你的分數：" + score + " / 5", 660, 120);
@@ -171,29 +183,98 @@ function showQuestion() {
 }
 
 function showHandGesture() {
-  if (handPredictions.length > 0 && !showResult) {
-    const hand = handPredictions[0];
-    let count = countExtendedFingers(hand.landmarks);
-    let answer = "";
-    if (count >= 1 && count <= 4) {
-      answer = String.fromCharCode(64 + count); // 1->A, 2->B, 3->C, 4->D
+  if (handPredictions.length >= 2 && !showResult && !waitingNext) {
+    // 兩隻手
+    let handA = handPredictions[0];
+    let handB = handPredictions[1];
+    let countA = countExtendedFingers(handA.landmarks);
+    let countB = countExtendedFingers(handB.landmarks);
+
+    // 檢查是否有一手比1~4，另一手比OK
+    let okA = isOKGesture(handA.landmarks);
+    let okB = isOKGesture(handB.landmarks);
+
+    if (
+      ((countA >= 1 && countA <= 4) && okB) ||
+      ((countB >= 1 && countB <= 4) && okA)
+    ) {
+      let answer = String.fromCharCode(64 + (okA ? countB : countA));
       selectedAnswer = answer;
       showResult = true;
       showEffect = true;
       effectType = (answer === quizQuestions[currentQuestion].answer) ? "correct" : "wrong";
       if (effectType === "correct") score++;
       effectTimer = millis();
-      setTimeout(() => {
-        selectedAnswer = "";
-        showResult = false;
-        showEffect = false;
-        currentQuestion++;
-        if (currentQuestion >= 5) {
-          gameState = "result";
-        }
-      }, 3000);
+      waitingNext = true;
     }
   }
+
+  // 比出7手勢顯示說明
+  if (handPredictions.length > 0 && detectSevenGesture(handPredictions[0].landmarks)) {
+    showHelp = true;
+  } else {
+    showHelp = false;
+  }
+
+  // 張開手(五指)切換下一題
+  if (waitingNext && handPredictions.length > 0 && countExtendedFingers(handPredictions[0].landmarks) === 5) {
+    selectedAnswer = "";
+    showResult = false;
+    showEffect = false;
+    waitingNext = false;
+    currentQuestion++;
+    if (currentQuestion >= 5) {
+      gameState = "result";
+    }
+  }
+}
+
+// 判斷OK手勢（拇指與食指指尖距離接近，其餘三指伸直）
+// 判斷OK手勢（拇指與食指指尖距離接近，其餘三指伸直）
+function isOKGesture(landmarks) {
+  let thumbTip = landmarks[4];
+  let indexTip = landmarks[8];
+  let dist = dist2d(thumbTip, indexTip);
+  let middle = landmarks[12][1] < landmarks[10][1];
+  let ring = landmarks[16][1] < landmarks[14][1];
+  let pinky = landmarks[20][1] < landmarks[18][1];
+  return dist < 40 && middle && ring && pinky;
+}
+
+function dist2d(a, b) {
+  return Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2);
+}
+
+// 判斷7手勢（食指與中指伸直，其餘彎曲）
+function detectSevenGesture(landmarks) {
+  let fingers = [
+    landmarks[8][1] < landmarks[6][1],  // 食指
+    landmarks[12][1] < landmarks[10][1], // 中指
+    landmarks[16][1] > landmarks[14][1], // 無名指
+    landmarks[20][1] > landmarks[18][1], // 小指
+    landmarks[4][0] < landmarks[3][0]    // 拇指彎曲
+  ];
+  return fingers[0] && fingers[1] && !fingers[2] && !fingers[3] && fingers[4];
+}
+
+// 歡樂特效
+function drawHappyEffect(x, y) {
+  push();
+  for (let i = 0; i < 10; i++) {
+    fill(random(200,255), random(200,255), 0, 180);
+    ellipse(x + random(-40,40), y + random(-40,40), random(10,25));
+  }
+  pop();
+}
+
+// 陰暗特效
+function drawSadEffect(x, y) {
+  push();
+  for (let i = 0; i < 8; i++) {
+    fill(50, 50, 50, 120);
+    ellipse(x + random(-30,30), y + random(-30,30), random(15,30));
+  }
+  pop();
 }
 
 // 計算伸出的手指數量
