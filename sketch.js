@@ -72,8 +72,8 @@ const allQuestions = [
 // 載入圖示
 let checkImg, crossImg;
 function preload() {
-  checkImg = loadImage('勾.png'); // 本地綠色勾勾
-  crossImg = loadImage('叉.png'); // 本地紅色叉叉
+  checkImg = loadImage('check.png'); // 英文檔名
+  crossImg = loadImage('cross.png');
 }
 
 let showHelp = false;
