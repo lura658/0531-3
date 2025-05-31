@@ -13,21 +13,25 @@ let score = 0;
 
 // p5.js 問答題庫
 const questions = [
+  // p5.js 題目
   {
     q: "p5.js 中用來建立畫布的函式是？",
     options: ["A. createCanvas", "B. createRect", "C. makeCanvas", "D. setupCanvas"],
     answer: "A"
   },
+  // 教學原理題目
   {
-    q: "哪個函式會在每一幀自動執行？",
-    options: ["A. setup", "B. draw", "C. loop", "D. frame"],
-    answer: "B"
-  },
-  {
-    q: "要設定背景顏色應該用哪個函式？",
-    options: ["A. fill", "B. stroke", "C. background", "D. color"],
+    q: "布魯姆認知領域的最低層次是？",
+    options: ["A. 理解", "B. 應用", "C. 記憶", "D. 分析"],
     answer: "C"
+  },
+  // 教育心理題目
+  {
+    q: "皮亞傑認為兒童在什麼階段開始具備抽象思考能力？",
+    options: ["A. 感覺動作期", "B. 前運思期", "C. 具體運思期", "D. 形式運思期"],
+    answer: "D"
   }
+  // ...可繼續擴充...
 ];
 
 function setup() {
